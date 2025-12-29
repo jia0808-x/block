@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>打磚塊遊戲</title>
+    <link rel="stylesheet" href="./style.css">
+
+  </head>
+    
+  <body>
+  <!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>HTML5 打磚塊遊戲</title>
+    <style>
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #333; font-family: "Microsoft JhengHei", sans-serif; color: #eee; }
+        h1 { margin-bottom: 20px; }
+        canvas { background: #000; display: block; border: 2px solid #fff; }
+        #game-info { margin-top: 20px; font-size: 1.2em; display: flex; gap: 40px; }
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            text-align: center;
+            z-index: 10;
+        }
+        #game-over-screen button {
+            padding: 15px 30px;
+            font-size: 1em;
+            margin-top: 20px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>HTML5 打磚塊</h1>
+    <canvas id="myCanvas" width="800" height="600"></canvas>
+    <div id="game-info">
+        <div id="score">分數: 0</div>
+        <div id="lives">生命: 3</div>
+    </div>
+
+    <div id="game-over-screen">
+        <h2 id="final-message">遊戲結束！</h2>
+        <p>最終分數: <span id="final-score">0</span></p>
+        <button onclick="restartGame()">重新開始</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('myCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const livesElement = document.getElementById('lives');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalMessageElement = document.getElementById('final-message');
+        const finalScoreElement = document.getElementById('final-score');
+
+        // --- 遊戲變數 ---
+        let score = 0;
+        let lives = 3;
+        let gameOver = false;
+        let gameWin = false;
+
+        // --- 球的屬性 ---
+        let ballRadius = 10;
+        let x = canvas.width / 2;
+        let y = canvas.height - 30;
+        let dx = 3; // 球X軸移動速度
+        let dy = -3; // 球Y軸移動速度
+
+        // --- 拍子的屬性 ---
+        let paddleHeight = 15;
+        let paddleWidth = 100;
+        let paddleX = (canvas.width - paddleWidth) / 2;
+        let rightPressed = false;
+        let leftPressed = false;
+
+        // --- 磚塊的屬性 ---
+        const brickRowCount = 5;
+        const brickColumnCount = 8;
+        const brickWidth = 75;
+        const brickHeight = 20;
+        const brickPadding = 10;
+        const brickOffsetTop = 30;
+        const brickOffsetLeft = 30;
+        let bricks = [];
+
+        function initBricks() {
+            bricks = []; // 清空舊的磚塊
+            for (let c = 0; c < brickColumnCount; c++) {
+                bricks[c] = [];
+                for (let r = 0; r < brickRowCount; r++) {
+                    bricks[c][r] = { x: 0, y: 0, status: 1 }; // status: 1表示存在, 0表示已消除
+                }
+            }
+        }
+        initBricks(); // 初始化磚塊
+
+        // --- 事件監聽 (控制拍子) ---
+        document.addEventListener("keydown", keyDownHandler, false);
+        document.addEventListener("keyup", keyUpHandler, false);
+
+        function keyDownHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = true;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = true;
+            }
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = false;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = false;
+            }
+        }
+
+        // --- 繪製函數 ---
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "#0095DD";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+            ctx.fillStyle = "#0095DD";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawBricks() {
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    if (bricks[c][r].status === 1) { // 只繪製存在的磚塊
+                        const brickX = c * (brickWidth + brickPadding) + brickOffsetLeft;
+                        const brickY = r * (brickHeight + brickPadding) + brickOffsetTop;
+                        bricks[c][r].x = brickX;
+                        bricks[c][r].y = brickY;
+                        ctx.beginPath();
+                        ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                        ctx.fillStyle = "#FF7F50"; // 磚塊顏色
+                        ctx.fill();
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+        function drawScore() {
+            scoreElement.innerText = `分數: ${score}`;
+        }
+
+        function drawLives() {
+            livesElement.innerText = `生命: ${lives}`;
+        }
+
+        // --- 碰撞檢測 ---
+        function collisionDetection() {
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    const b = bricks[c][r];
+                    if (b.status === 1) { // 檢查存在的磚塊
+                        if (x > b.x && x < b.x + brickWidth && y > b.y && y < b.y + brickHeight) {
+                            dy = -dy; // 反彈
+                            b.status = 0; // 磚塊消失
+                            score += 10;
+                            if (score === brickRowCount * brickColumnCount * 10) {
+                                gameWin = true;
+                                gameOver = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 遊戲主循環 ---
+        function draw() {
+            if (gameOver) {
+                gameOverScreen.style.display = 'flex';
+                finalScoreElement.innerText = score;
+                if (gameWin) {
+                    finalMessageElement.innerText = "恭喜！你贏了！";
+                } else {
+                    finalMessageElement.innerText = "遊戲結束！";
+                }
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空畫布
+
+            drawBricks();
+            drawBall();
+            drawPaddle();
+            drawScore();
+            drawLives();
+            collisionDetection();
+
+            // 球的移動和邊界反彈
+            if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
+                dx = -dx;
+            }
+            if (y + dy < ballRadius) {
+                dy = -dy;
+            } else if (y + dy > canvas.height - ballRadius) {
+                // 球接觸底部
+                if (x > paddleX && x < paddleX + paddleWidth) {
+                    // 球擊中拍子
+                    dy = -dy;
+                } else {
+                    // 球漏掉了
+                    lives--;
+                    if (!lives) {
+                        gameOver = true;
+                    } else {
+                        // 重置球和拍子位置
+                        x = canvas.width / 2;
+                        y = canvas.height - 30;
+                        dx = 3;
+                        dy = -3;
+                        paddleX = (canvas.width - paddleWidth) / 2;
+                    }
+                }
+            }
+
+            // 拍子的移動
+            if (rightPressed && paddleX < canvas.width - paddleWidth) {
+                paddleX += 7;
+            } else if (leftPressed && paddleX > 0) {
+                paddleX -= 7;
+            }
+
+            x += dx;
+            y += dy;
+
+            requestAnimationFrame(draw); // 持續循環繪製
+        }
+
+        function restartGame() {
+            score = 0;
+            lives = 3;
+            gameOver = false;
+            gameWin = false;
+            x = canvas.width / 2;
+            y = canvas.height - 30;
+            dx = 3;
+            dy = -3;
+            paddleX = (canvas.width - paddleWidth) / 2;
+            initBricks();
+            gameOverScreen.style.display = 'none';
+            draw(); // 重新開始遊戲循環
+        }
+
+        // 啟動遊戲
+        draw();
+    </script>
+</body>
+</html>
+    
+  </body>
+  
+</html>
